@@ -1,0 +1,203 @@
+﻿@{
+    ViewData["Title"] = "Home Page";
+}
+
+@section Scripts
+    {
+    <script src="~/lib/microsoft/signalr/dist/browser/signalr.min.js"></script>
+    <script type="text/javascript">
+        $(document).ready(() => {
+         
+            var connection = new signalR.HubConnectionBuilder().configureLogging(signalR.LogLevel.Debug).withAutomaticReconnect([1000,3000,5000,10000]).withUrl("https://localhost:44313/MyHub").build();
+            $("#conStatus").text(connection.connectionState);
+            start();
+            function start() {
+
+                connection.start().then(() => {
+                    $("#conStatus").text(connection.connectionState);
+                    $("#loading").hide();
+
+                   // connection.invoke("GetNames");
+                    connection.invoke("GetNamesByGroup");
+                }).catch((err) => { console.log(err);
+                    setTimeout(()=>start(),2000)
+                }
+                );
+            }
+
+
+            connection.onreconnecting((err) => {
+                $("#loading").show();
+                $("#conStatus").text(connection.connectionState);
+                console.log("onconnection:"+err);
+            });
+
+            connection.onreconnected((connectionId) => {
+                $("#loading").hide();
+                $("#conStatus").text(connection.connectionState);
+               
+            });
+            connection.onclose(() => {
+                $("#loading").hide();
+                $("#conStatus").text(connection.connectionState);
+                start();
+
+            });
+
+
+            $("#btnNameSave").click(() => {
+                connection.invoke("SendName", $("#txtName").val()).catch((err) => {
+                    console.log(err);
+
+                });
+            });
+
+            $("#btnNameTeam").click(() => {
+                let name = $("#txtName").val();
+                let teamName = $("input[type=radio]:checked").val();
+
+                if (teamName==null) {
+                    alert("Takım Seçiniz");
+                    return;
+                }
+
+                connection.invoke("SendNameByGroup", name, teamName).catch((err) => {
+                    console.log(err);
+                });
+
+            });
+            $("input[type=radio]").change(() => {
+                let value = $("input[type=radio]:checked").val();
+                if (value == "Team A") {
+                    connection.invoke("AddToGroup", "Team A");
+                    connection.invoke("RemoveToGroup", "Team B");
+                } else {
+                    connection.invoke("AddToGroup", "Team B");
+                    connection.invoke("RemoveToGroup", "Team A");
+                }
+            });
+
+            $("#btnProduct").click(() => {
+                let product = { "Id": 1, "Name": "Kalem", "Price": 100, "Stock": 5 };
+                connection.invoke("SendProduct",product);
+            })
+
+            connection.on("ReceiveProduct", (product) => {
+                console.log(product);
+            });
+
+
+            connection.on("ReceiveMessageByGroup",(name,teamId)=>{
+                let listName;
+                if (teamId = 1) {
+                    listName = "ATeamList";
+                }
+                else {
+                    listName = "BTeamList";
+                }
+                $(`${listName}`).append(`<li class="list-group-item">${name}</li>`);
+            });
+
+            connection.on("ReceiveName", (name) => {
+                $("#namesList").append(`<li class="list-group-item"> ${name} </li>`)
+            });
+            connection.on("ReceiveClientCount", (clientCount) => {
+                $("#clientCount").text(clientCount);
+            });
+            connection.on("Notify", (message) => {
+                $("notify").html(`<div class="alert alert-success">${message}</div>`);
+            });
+            connection.on("Error",(message)=>{
+                alert(message);
+            });
+            connection.on("ReceiveName", (names) => {
+                $("#namesList").empty();
+                names.forEach((name) => {
+                    $("#namesList").append(`<li class="list-group-item"> ${name} </li>`)
+                });
+            });
+
+
+            connection.on("ReceiveNamesByGroup", (teams) => {
+                teams.forEach((team,index) => {
+
+                    let listName;
+                    if (team.teamId = 1) {
+                        listName = "ATeamList";
+                    }
+                    else {
+                        listName = "BTeamList";
+                    }
+
+                    team.Users.forEach((user,index) => {
+                        $(`${listName}`).append(`<li class="list-group-item">${user.name}</li>`);
+                    });
+              
+
+
+                });
+            });
+
+
+        })
+
+
+
+    </script>
+}
+<div class="row">
+    <div class="col-md-8 offset-2">
+        <input id="txtName" class="form-control" type="text" />
+        <br />
+        <button id="btnNameSave" class="btn btn-primary">İsim Kaydet</button>
+        <button id="btnNameTeam" class="btn btn-warning">İsim Kaydet(Takım)</button>
+        <button id="btnProduct" class="btn btn-warning">Ürün  Gönder</button>
+
+        <div class="alert alert-info mt-2">
+            <div class="float-left">  Bağlantı Durumu:<strong id="conStatus"></strong>
+                Client Sayısı:<strong id="clientCount"></strong></div>
+            <div class="float-right">
+                <div id="loading" class="spinner-border" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </div>
+          <div class="clearfix"></div>
+        </div>
+        <div id="notify" class="alert alert-info">
+
+        </div>
+    </div>
+   
+</div>
+<div class="row">
+    <div class="col-md-8 offset-2">
+        <div class="form-check form-check-inline">
+            <input class="form-check-input" type="radio" name="TeamGroup" value="Team A"/>
+            <label class="form-check-label"> A Takımı</label>
+        </div>
+
+        <div class="form-check form-check-inline">
+            <input class="form-check-input" type="radio" name="TeamGroup" value="Team B" />
+            <label class="form-check-label"> B Takımı</label>
+        </div>
+
+    </div>
+
+
+    <div class="col-md-8 offset-2">
+        <div class="row">
+
+            <div class="col-md-6">
+                <h2>A Takımı</h2>
+                <ul class="list-group" id="ATeamList"></ul>
+            </div>
+            <div class="col-md-6">
+                <h2>B Takımı</h2>
+                <ul class="list-group" id="BTeamList"></ul>
+            </div>
+            </div>
+
+        </div>
+
+    </div>
+</div>
